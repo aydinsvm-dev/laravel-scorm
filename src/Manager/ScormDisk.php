@@ -29,14 +29,33 @@ class ScormDisk
             for ($i = 0; $i < $unzipper->numFiles; ++$i) {
                 $zipEntryName = $unzipper->getNameIndex($i);
                 $destination = $this->join($target_dir, $this->cleanPath($zipEntryName));
+
                 if ($this->isDirectory($zipEntryName)) {
                     $disk->createDirectory($destination);
                     continue;
                 }
-                $disk->writeStream($destination, $unzipper->getStream($zipEntryName));
+
+                $stream = $unzipper->getStream($zipEntryName);
+                if (! is_resource($stream)) {
+                    continue;
+                }
+
+                // Copy to a seekable temporary stream for GCS compatibility
+                $tempStream = fopen('php://temp', 'r+b');
+                stream_copy_to_stream($stream, $tempStream);
+                rewind($tempStream);
+                fclose($stream);
+
+                $disk->writeStream($destination, $tempStream);
+
+                if (is_resource($tempStream)) {
+                    fclose($tempStream);
+                }
             }
+
             return true;
         }
+
         return false;
     }
 
